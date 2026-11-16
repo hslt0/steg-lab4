@@ -1,24 +1,29 @@
 import wave
 import numpy as np
 
-def embed_message(input_wav: str, output_wav: str, message: str):
-    message += chr(0)
-    bits = ''.join(f'{ord(c):08b}' for c in message)
+from prng_utils import generate_indices
 
-    with wave.open(input_wav, 'rb') as w:
-        params = w.getparams()
-        frames = w.readframes(params.nframes)
+
+def embed_message_prng(
+    input_wav: str, output_wav: str, message: str, key: str
+) -> None:
+    payload = message.encode("utf-8") + b"\0"
+    bits = np.unpackbits(np.frombuffer(payload, dtype=np.uint8))
+
+    with wave.open(input_wav, "rb") as wav_file:
+        params = wav_file.getparams()
+        frames = wav_file.readframes(params.nframes)
     samples = np.frombuffer(frames, dtype=np.int16)
 
     if len(bits) > len(samples):
         raise ValueError("Повідомлення занадто довге для цього аудіо")
 
+    indices = generate_indices(key, len(samples))[:len(bits)]
     samples_mod = samples.copy()
-    for i, bit in enumerate(bits):
-        samples_mod[i] = (samples_mod[i] & ~1) | int(bit)
+    samples_mod[indices] = (samples_mod[indices] & ~1) | bits
 
-    with wave.open(output_wav, 'wb') as w:
-        w.setparams(params)
-        w.writeframes(samples_mod.tobytes())
+    with wave.open(output_wav, "wb") as wav_file:
+        wav_file.setparams(params)
+        wav_file.writeframes(samples_mod.tobytes())
 
-    print(f"Повідомлення сховано в {output_wav}")
+    print(f"Повідомлення сховано в {output_wav} з використанням PRNG")

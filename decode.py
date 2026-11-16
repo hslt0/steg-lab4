@@ -1,12 +1,22 @@
 import wave
 import numpy as np
 
-def extract_message(stego_wav: str) -> str:
-    with wave.open(stego_wav, 'rb') as w:
-        frames = w.readframes(w.getnframes())
-    samples = np.frombuffer(frames, dtype=np.int16)
+from prng_utils import generate_indices
 
-    bits = ''.join(str(s & 1) for s in samples)
-    chars = [chr(int(bits[i:i+8], 2)) for i in range(0, len(bits), 8)]
-    message = ''.join(chars).split(chr(0))[0]
-    return message
+
+def extract_message_prng(stego_wav: str, key: str) -> str:
+    with wave.open(stego_wav, "rb") as wav_file:
+        frames = wav_file.readframes(wav_file.getnframes())
+    samples = np.frombuffer(frames, dtype=np.int16)
+    indices = generate_indices(key, len(samples))
+
+    message_bytes = bytearray()
+    for start in range(0, len(indices) - 7, 8):
+        byte = 0
+        for index in indices[start:start + 8]:
+            byte = (byte << 1) | (int(samples[index]) & 1)
+        if byte == 0:
+            return message_bytes.decode("utf-8")
+        message_bytes.append(byte)
+
+    raise ValueError("Не знайдено кінець повідомлення: перевірте ключ і WAV-файл")
